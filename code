@@ -1,0 +1,282 @@
+#include <sys/syscall.h>
+#include <linux/kernel.h>
+#include<linux/delay.h>
+#include<linux/module.h>
+#include<linux/kernel.h>
+#include<linux/kthread.h>
+#include<linux/sched.h>
+#include<linux/time.h>
+#include<linux/timer.h>
+#include<linux/semaphore.h>
+// prices of flavours and toppings
+
+#define priceFlav_1 1.05
+#define priceFlav_2 2.00
+#define priceFlav_3 1.67
+#define priceTopp_1 0.8
+#define priceTopp_2 0.5
+////////////////////////////////semaphores///////////////////////////////////////
+static struct semaphore ticketC;
+static struct semaphore flavorC;
+static struct semaphore f1;
+static struct semaphore f2;
+static struct semaphore f3;
+static struct semaphore toppingC;
+static struct semaphore t1;
+static struct semaphore t2;
+static struct semaphore paymentC;
+
+
+// resources
+int ticket = 30, _flavors[3] = {29, 34, 18}, _toppings[2] = {20, 34};
+double revenue = 0.0;
+
+// semaphores declaration
+//sem_t ticketC, flavorC, f1, f2, f3, toppingC, t1, t2, paymentC;
+
+////////////////////////////////functions///////////////////////////////////////
+void *iceCream(void *_id)
+{
+	int _ID = (int)_id, checkRaceCond_1 = 0;
+	double bill = 0.0;
+
+	// ticket counter - ENTER
+	down(&ticketC);
+
+	if(ticket <= 0)
+	{
+		printk("\nCustomer[%d]: Leaving Shop. [REASON]: Tickets Finished\n", _ID);
+		//syscall(333,"Leaving Shop. [REASON]: Tickets Finished\n",_ID);
+		msleep(1);
+		//kthread_exit(NULL);
+	}
+
+	ticket--;
+	printk("Customer[%d] Got Ticket.\n", _ID);
+	//syscall(333,"Got Ticket.\n",_ID);
+
+	up(&ticketC);
+	// ticket counter - EXIT
+
+	msleep(2);
+
+	// flavours counter - ENTER
+	down(&flavorC);
+
+	// Race Condition will occur here but it will be handled through thread Local Variable
+	// [REASON]: when this condition is checked by 4th thread
+	//           and then _flavours[i] is decremented by any of first 2 threads
+	//           a thread will proceed even though flavors have been finished.
+	// WHY THIS CONDITION IS USED WHEN ITS WORK IS DONE BY LOCAL THREAD VARIABLE?
+	// [REASON]: If this is not used then a thread will check each condition below
+	//           which will be time consuming.
+	if(_flavors[0] <= 0 && _flavors[1] <= 0 && _flavors[2] <= 0)
+	{
+	    printk("Leaving Shop, flav finished for %d.", _ID);
+		//syscall(333,"Leaving Shop. [REASON]: Flavours Finished\n", _ID);
+		msleep(1);
+		//pthread_exit(NULL);
+	}
+	else
+	{
+		// flavor1
+		down(&f1);
+
+		if(_flavors[0] > 0)
+		{
+			_flavors[0]--;
+			checkRaceCond_1++;
+			bill = bill + priceFlav_1;
+			printk ("\nCustomer[%d]: Got Flavour[0].\n", _ID);
+			//syscall(333,"Got Flavour[0].\n",_ID);
+			msleep(1);
+		}
+
+		up(&f1);
+
+		// flavor2
+		down(&f2);
+
+		if(_flavors[1] > 0)
+		{
+			_flavors[1]--;
+			checkRaceCond_1++;
+			bill = bill + priceFlav_2;
+			printk("Customer[%d]: Got Flavour[1].\n", _ID);
+			//syscall(333,"Got Flavour[1].\n",_ID);
+			msleep(1);
+		}
+
+		up(&f2);
+
+		// flavor3
+		down(&f3);
+
+		if(_flavors[2] > 0)
+		{
+			_flavors[2]--;
+			checkRaceCond_1++;
+			bill = bill + priceFlav_3;
+			printk("Customer[%d]: Got Flavour[2].\n", _ID);
+			//syscall(333,"Got Flavour[2].\n",_ID);
+			msleep(1);
+		}
+
+		up(&f3);
+
+		// if any of the threads did not get any flavour,
+		// 'checkRaceCond_1' will remain 0,
+		// threads will exit
+		if(checkRaceCond_1 == 0)
+		{
+			printk("\nCustomer[%d]: Leaving Shop. [REASON]: Flavours Finished\n", _ID);
+			//syscall(333,"Leaving Shop. [REASON]: Flavours Finished\n",_ID);
+			msleep(1);
+			//pthread_exit(NULL);
+		}
+	}
+
+	printk("\nCustomer[%d]: Got Flavour(s). Leaving Flavor Counter\n", _ID);
+	//syscall(333,"Got Flavour(s). Leaving Flavor Counter\n",_ID);
+	msleep(2);
+
+	up(&flavorC);
+	// flavors counter - EXIT
+
+
+	// toppings counter - ENTER
+	down(&toppingC);
+
+	// topping1
+	down(&t1);
+
+	if(_toppings[0] > 0)
+	{
+		_toppings[0]--;
+		bill = bill + priceTopp_1;
+	}
+
+	up(&t1);
+
+	// topping2
+	down(&t2);
+
+	if(_toppings[1] > 0)
+	{
+		_toppings[1]--;
+		bill = bill + priceTopp_2;
+	}
+
+	up(&t2);
+
+	printk("\nCustomer[%d]: Leaving Topping Counter.\n", _ID);
+	//syscall(333,"Leaving Topping Counter.\n",_ID);
+
+	up(&toppingC);
+	// toppings counter - EXIT
+
+	msleep(2);
+
+	// payments counter - ENTER
+	down(&paymentC);
+
+	revenue = revenue + bill;
+
+	printk("\nCustomer[%d]: Billed: $ %f.\n", _ID, bill);
+	char a[100];
+	printk("Billed: $ %f.\n",bill);
+	//syscall(333,a,_ID);
+
+	up(&paymentC);
+	// payments counter - EXIT
+
+	msleep(2);
+
+	printk("\nCustomer[%d]: Leaving Ice-Cream Shop.\n\n", _ID);
+	//syscall(333,"Leaving Ice-Cream Shop.\n\n",_ID);
+
+	return NULL;
+}
+
+
+// main
+asmlinkage long sys_hello(void)
+{
+    
+	int noC;
+
+	printk("\n\nEnter Number Of Customers [1-%d]: ", ticket);
+	noC = 5;
+	printk("\n\n");
+
+	if(noC > ticket || noC <= 0)
+	{
+		printk("\n\nInvalid Input!\n\n");
+		return 0;
+	}
+
+	int _id[noC];
+
+	for(int i=0; i<noC; i++)
+	{
+		_id[i] = i+100;
+	}
+
+	// semaphore initialization - START
+	sem_init(&ticketC, 1);
+
+	sem_init(&flavorC, 3);
+	sem_init(&f1, 1);
+	sem_init(&f2, 1);
+	sem_init(&f3, 1);
+
+	sem_init(&toppingC, 2);
+	sem_init(&t1, 1);
+	sem_init(&t2, 1);
+
+	sem_init(&paymentC, 1);
+
+	// semaphore initialization - END
+
+
+	// multithreading region - START
+	static struct task_struct *customer[noC];
+
+	for(int i=0; i<noC; i++)
+	{
+		customer[i] = pthread_create(&iceCream, (void*)&_id[i], "customerthread");
+	}
+
+	for(int i=0; i<noC; i++)
+	{
+		kthread_stop(customer[i]);
+	}
+	
+	// multithreading region - END
+
+
+	printk("\n\nBusiness Journal - At Closing\n\n");
+	printk("Number Of Customers: %d", noC);
+	printk("\nRevenue Generated: $ %f", revenue);
+	printk("\nTickets Remaining: %d\n\n", ticket);
+
+
+	// semaphore destroying - START
+
+	/*/sem_destroy(&ticketC);
+
+	sem_destroy(&flavorC);
+	sem_destroy(&f1);
+	sem_destroy(&f2);
+	sem_destroy(&f3);
+
+	sem_destroy(&toppingC);
+	sem_destroy(&t1);
+	sem_destroy(&t2);
+
+	sem_destroy(&paymentC);*/
+
+	// semaphore destroying - END
+
+	return 0;
+}
