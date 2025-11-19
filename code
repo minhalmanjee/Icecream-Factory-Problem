@@ -290,7 +290,7 @@ asmlinkage long sys_hello(void)
 
 
 #PRACTICT IMPLEMENTATION WIH IPC
-// ================= icecream_shop.h =================
+//icecream shop.h
 #ifndef ICECREAM_SHOP_H
 #define ICECREAM_SHOP_H
 
@@ -306,10 +306,9 @@ struct ice_cream_shop {
 };
 
 #endif
-// ====================================================
 
 
-// ================= icecream_kmod.c =================
+//  icecream_kmod.c 
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/semaphore.h>
@@ -423,7 +422,7 @@ module_init(icecream_init);
 module_exit(icecream_exit);
 
 
-// ================= user_process.c =================
+//  user_process.c 
 #include <stdio.h>
 #include <fcntl.h>
 #include <sys/mman.h>
